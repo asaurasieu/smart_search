@@ -157,4 +157,53 @@ async def search(request: SearchRequest):
     return SearchResponse(results=articles)
 
 
+@app.post("/tutorials", response_model=SearchResponse)
+async def tutorials(request: SearchRequest):
+    prompt = request.prompt.strip()
+    if not prompt:
+        raise HTTPException(status_code=400, detail="Prompt cannot be empty")
+
+    queries = [
+        f"{prompt} tutorial implementation python code example",
+        f"{prompt} pytorch python step by step guide",
+        f"{prompt} github notebook hands-on implementation",
+    ]
+
+    seen_urls: set[str] = set()
+    raw_results: list[dict] = []
+
+    with DDGS() as ddgs:
+        for query in queries:
+            hits = list(ddgs.text(query, max_results=5))
+            for h in hits:
+                url = h.get("href", "")
+                if not url or url in seen_urls:
+                    continue
+                seen_urls.add(url)
+                raw_results.append(h)
+                if len(raw_results) >= 9:
+                    break
+            if len(raw_results) >= 9:
+                break
+
+    if not raw_results:
+        raise HTTPException(status_code=404, detail="No tutorials found")
+
+    contents = await asyncio.gather(*[fetch_article_text(r.get("href", "")) for r in raw_results])
+
+    articles = [
+        Article(
+            title=r.get("title", ""),
+            url=r.get("href", ""),
+            snippet=r.get("body", ""),
+            content=content,
+            date="",
+            level="tutorial",
+        )
+        for r, content in zip(raw_results, contents)
+    ]
+
+    return SearchResponse(results=articles)
+
+
 app.mount("/", StaticFiles(directory="static", html=True), name="static")

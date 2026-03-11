@@ -323,6 +323,175 @@
       .mode-buttons { flex-direction: column; }
       .categories-grid { grid-template-columns: 1fr 1fr; }
     }
+
+    /* ── Modal overlay ── */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.75);
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      backdrop-filter: blur(4px);
+    }
+
+    .modal-overlay.hidden { display: none; }
+
+    .modal-panel {
+      background: #1c1c22;
+      border: 1px solid #3e3e52;
+      border-radius: 18px;
+      width: 100%;
+      max-width: 640px;
+      max-height: 80vh;
+      overflow-y: auto;
+      padding: 28px 32px;
+    }
+
+    .modal-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .modal-title {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: #e0e0ea;
+      line-height: 1.4;
+      flex: 1;
+    }
+
+    .modal-close {
+      background: none;
+      border: 1px solid #3e3e52;
+      color: #666;
+      font-size: 1.2rem;
+      width: 30px;
+      height: 30px;
+      border-radius: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      line-height: 1;
+      transition: color 0.15s, border-color 0.15s;
+    }
+
+    .modal-close:hover { color: #a78bfa; border-color: #a78bfa; }
+
+    /* Key points list (summary modal) */
+    .summary-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .summary-list li {
+      font-size: 0.91rem;
+      color: #999;
+      line-height: 1.65;
+      padding-left: 18px;
+      position: relative;
+    }
+
+    .summary-list li::before {
+      content: "•";
+      position: absolute;
+      left: 0;
+      color: #a78bfa;
+      font-weight: 700;
+    }
+
+    /* Tutorial cards inside modal */
+    .tutorial-card {
+      background: #16161c;
+      border: 1px solid #2e2e3a;
+      border-radius: 12px;
+      padding: 16px 18px;
+      margin-bottom: 12px;
+    }
+
+    .tutorial-card:last-child { margin-bottom: 0; }
+
+    .tutorial-card-source {
+      font-size: 0.7rem;
+      color: #555;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 6px;
+    }
+
+    .tutorial-card a {
+      font-size: 0.97rem;
+      font-weight: 600;
+      color: #a78bfa;
+      text-decoration: none;
+      display: block;
+      margin-bottom: 8px;
+      line-height: 1.4;
+    }
+
+    .tutorial-card a:hover { color: #c4b5fd; }
+
+    .tutorial-card-snippet {
+      font-size: 0.87rem;
+      color: #777;
+      line-height: 1.55;
+    }
+
+    /* Card action buttons row */
+    .card-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .summary-btn {
+      background: none;
+      border: 1px solid #2e2e3a;
+      color: #666;
+      font-size: 0.78rem;
+      padding: 4px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s;
+    }
+
+    .summary-btn:hover { color: #60a5fa; border-color: #60a5fa; }
+
+    /* Tutorials trigger row (shown after deep search) */
+    .tutorials-trigger {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 0;
+      border-bottom: 1px solid #2e2e3a;
+      margin-bottom: 4px;
+    }
+
+    .tutorials-btn {
+      background: none;
+      border: 1px solid #2e2e3a;
+      color: #888;
+      font-size: 0.84rem;
+      padding: 8px 16px;
+      border-radius: 10px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: color 0.15s, border-color 0.15s;
+    }
+
+    .tutorials-btn:hover { color: #a78bfa; border-color: #a78bfa; }
+    .tutorials-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    .tutorials-hint { font-size: 0.81rem; color: #444; }
   </style>
 </head>
 <body>
@@ -398,8 +567,21 @@
   <div id="status"></div>
   <div id="results"></div>
 
+  <!-- ── Modal (shared for summary & tutorials) ── -->
+  <div id="modal-overlay" class="modal-overlay hidden" onclick="closeModal(event)">
+    <div class="modal-panel">
+      <div class="modal-header">
+        <div class="modal-title" id="modal-title"></div>
+        <button class="modal-close" onclick="closeModal()">&times;</button>
+      </div>
+      <div id="modal-body"></div>
+    </div>
+  </div>
+
   <script>
     let activeMode = null;
+    let articlesData = [];        // last rendered articles (for summary lookup)
+    let currentSearchTopic = "";  // last deep-search prompt (for tutorials)
 
     document.getElementById("prompt").addEventListener("keydown", e => {
       if (e.key === "Enter") doDeepSearch();
@@ -433,6 +615,7 @@
     }
 
     function renderResults(articles, showLevel) {
+      articlesData = articles;
       const results = document.getElementById("results");
       results.innerHTML = "";
 
@@ -448,6 +631,11 @@
           levelBadge = `<span class="level-badge level-${item.level}">${label}</span>`;
         }
 
+        // Summary button only for news cards (not deep search)
+        const summaryBtn = (!showLevel && hasContent)
+          ? `<button class="summary-btn" onclick="openSummaryModal(${i})">Summarize</button>`
+          : "";
+
         card.innerHTML = `
           <div class="card-meta">
             <span class="card-source">${hostname(item.url)}${date ? " &middot; " + date : ""}</span>
@@ -457,7 +645,10 @@
           <div class="card-title"><a href="${item.url}" target="_blank" rel="noopener">${item.title || "Untitled"}</a></div>
           <div class="card-snippet">${item.snippet || ""}</div>
           ${hasContent ? `
-            <button class="toggle-btn" onclick="toggleContent(${i})">Show article text</button>
+            <div class="card-actions">
+              <button class="toggle-btn" id="toggle-${i}" onclick="toggleContent(${i})">Show article text</button>
+              ${summaryBtn}
+            </div>
             <div class="card-content" id="content-${i}">${item.content}</div>
           ` : ""}
         `;
@@ -497,6 +688,8 @@
       const prompt = document.getElementById("prompt").value.trim();
       if (!prompt) return;
 
+      currentSearchTopic = prompt;
+
       const btn = document.getElementById("search-btn");
       const status = document.getElementById("status");
       const results = document.getElementById("results");
@@ -520,6 +713,17 @@
         const data = await res.json();
         status.textContent = `${data.results.length} articles · ordered from introductory to advanced`;
         renderResults(data.results, true);
+
+        // Prepend tutorials trigger above the article cards
+        const trigger = document.createElement("div");
+        trigger.className = "tutorials-trigger";
+        trigger.innerHTML = `
+          <button class="tutorials-btn" id="tutorials-btn" onclick="openTutorialModal(currentSearchTopic)">
+            See Tutorials &amp; Code Examples
+          </button>
+          <span class="tutorials-hint">Implementation guides for &ldquo;${prompt}&rdquo;</span>
+        `;
+        results.insertBefore(trigger, results.firstChild);
       } catch (err) {
         status.textContent = "Error: " + err.message;
       } finally {
@@ -529,10 +733,121 @@
 
     function toggleContent(i) {
       const el = document.getElementById(`content-${i}`);
-      const btn = el.previousElementSibling;
+      const btn = document.getElementById(`toggle-${i}`);
       const visible = el.style.display === "block";
       el.style.display = visible ? "none" : "block";
       btn.textContent = visible ? "Show article text" : "Hide article text";
+    }
+
+    // ── Extractive summarization (client-side) ──────────────────────────────
+    function summarizeText(text, numSentences) {
+      numSentences = numSentences || 6;
+      const sentences = text.match(/[^.!?]+[.!?]+/g) || [];
+      if (sentences.length === 0) return [];
+      if (sentences.length <= numSentences) return sentences.map(s => s.trim()).filter(s => s.length > 20);
+
+      const stopWords = new Set([
+        'the','a','an','and','or','but','in','on','at','to','for','of','with','by',
+        'from','is','are','was','were','be','been','being','have','has','had','do',
+        'does','did','will','would','could','should','may','might','shall','can',
+        'this','that','these','those','it','its','as','not','also','more','than',
+        'so','if','then','which','who','what','when','where','how','all','about',
+        'i','we','you','he','she','they','their','our','your','his','her'
+      ]);
+
+      const words = text.toLowerCase().match(/\b[a-z]+\b/g) || [];
+      const freq = {};
+      words.forEach(w => { if (!stopWords.has(w) && w.length > 2) freq[w] = (freq[w] || 0) + 1; });
+
+      const scored = sentences.map((s, i) => {
+        const sw = s.toLowerCase().match(/\b[a-z]+\b/g) || [];
+        const score = sw.reduce((sum, w) => sum + (freq[w] || 0), 0) / Math.max(sw.length, 1);
+        return { s: s.trim(), score, i };
+      });
+
+      // Always keep the first 2 sentences for context, then highest-scoring ones
+      const first = scored.slice(0, 2);
+      const rest = scored.slice(2).sort((a, b) => b.score - a.score).slice(0, numSentences - 2);
+      return [...first, ...rest]
+        .sort((a, b) => a.i - b.i)
+        .map(x => x.s)
+        .filter(s => s.length > 20);
+    }
+
+    // ── Modal helpers ────────────────────────────────────────────────────────
+    function closeModal(event) {
+      // If called from overlay click, only close when clicking the backdrop itself
+      if (event && event.target !== document.getElementById("modal-overlay")) return;
+      document.getElementById("modal-overlay").classList.add("hidden");
+      document.body.style.overflow = "";
+    }
+
+    function openSummaryModal(i) {
+      const item = articlesData[i];
+      if (!item) return;
+
+      document.getElementById("modal-title").textContent = item.title || "Article Summary";
+      const body = document.getElementById("modal-body");
+      const bullets = summarizeText(item.content);
+
+      if (bullets.length === 0) {
+        body.innerHTML = '<p style="color:#666;font-size:0.9rem;">Not enough content available to summarize.</p>';
+      } else {
+        body.innerHTML = '<ul class="summary-list">' +
+          bullets.map(b => `<li>${b}</li>`).join("") +
+          '</ul>';
+      }
+
+      document.getElementById("modal-overlay").classList.remove("hidden");
+      document.body.style.overflow = "hidden";
+    }
+
+    async function openTutorialModal(topic) {
+      const overlay = document.getElementById("modal-overlay");
+      document.getElementById("modal-title").textContent = `Tutorials & Code Examples: ${topic}`;
+      const body = document.getElementById("modal-body");
+
+      const tutBtn = document.getElementById("tutorials-btn");
+      if (tutBtn) tutBtn.disabled = true;
+
+      overlay.classList.remove("hidden");
+      document.body.style.overflow = "hidden";
+      body.innerHTML = `
+        <div style="display:flex;align-items:center;gap:10px;padding:30px 0;color:#555;">
+          <span class="spinner" style="width:16px;height:16px;margin-right:0;"></span>
+          <span style="font-size:0.9rem;">Finding tutorials…</span>
+        </div>`;
+
+      try {
+        const res = await fetch("/tutorials", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt: topic }),
+        });
+
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.detail || "Request failed");
+        }
+
+        const data = await res.json();
+
+        if (data.results.length === 0) {
+          body.innerHTML = '<p style="color:#666;font-size:0.9rem;">No tutorials found for this topic.</p>';
+        } else {
+          body.innerHTML = data.results.map(t => `
+            <div class="tutorial-card">
+              <div class="tutorial-card-source">${hostname(t.url)}</div>
+              <a href="${t.url}" target="_blank" rel="noopener">${t.title || "Untitled"}</a>
+              <div class="tutorial-card-snippet">${t.snippet || ""}</div>
+            </div>
+          `).join("");
+        }
+      } catch (err) {
+        body.innerHTML = `<p style="color:#c084fc;font-size:0.9rem;">Error: ${err.message}</p>`;
+      } finally {
+        if (tutBtn) tutBtn.disabled = false;
+      }
     }
   </script>
 </body>
