@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Smart Search</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0f0f11;
+      color: #e8e8ed;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 60px 20px 80px;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 52px;
+    }
+
+    header h1 {
+      font-size: 2.6rem;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      background: linear-gradient(135deg, #a78bfa, #60a5fa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    header p {
+      margin-top: 10px;
+      color: #555;
+      font-size: 1rem;
+    }
+
+    /* ── Mode buttons ── */
+    .mode-buttons {
+      display: flex;
+      gap: 20px;
+      width: 100%;
+      max-width: 720px;
+    }
+
+    .mode-btn {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 6px;
+      padding: 24px 28px;
+      background: #1c1c22;
+      border: 1px solid #2e2e3a;
+      border-radius: 16px;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s, transform 0.1s;
+      text-align: left;
+    }
+
+    .mode-btn:hover {
+      border-color: #6b5fe2;
+      background: #22222b;
+    }
+
+    .mode-btn:active { transform: scale(0.98); }
+
+    .mode-btn.active {
+      border-color: #7c6ef0;
+      background: #1e1b30;
+    }
+
+    .mode-icon {
+      font-size: 1.6rem;
+      margin-bottom: 4px;
+    }
+
+    .mode-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #e0e0ea;
+    }
+
+    .mode-desc {
+      font-size: 0.82rem;
+      color: #666;
+      line-height: 1.4;
+    }
+
+    /* ── View areas ── */
+    .view {
+      width: 100%;
+      max-width: 720px;
+      margin-top: 32px;
+    }
+
+    .hidden { display: none; }
+
+    /* ── Back button ── */
+    .back-btn {
+      background: none;
+      border: 1px solid #2e2e3a;
+      color: #666;
+      font-size: 0.85rem;
+      padding: 6px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      margin-bottom: 24px;
+      transition: color 0.15s, border-color 0.15s;
+    }
+
+    .back-btn:hover { color: #a78bfa; border-color: #a78bfa; }
+
+    /* ── Category grid ── */
+    .categories-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 14px;
+    }
+
+    .category-card {
+      padding: 20px 22px;
+      background: #1c1c22;
+      border: 1px solid #2e2e3a;
+      border-radius: 14px;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s, transform 0.1s;
+    }
+
+    .category-card:hover {
+      border-color: #6b5fe2;
+      background: #22222b;
+    }
+
+    .category-card:active { transform: scale(0.97); }
+
+    .category-card .cat-icon { font-size: 1.5rem; margin-bottom: 8px; }
+
+    .category-card .cat-name {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: #d8d8e8;
+      line-height: 1.3;
+    }
+
+    /* ── Deep search input ── */
+    .search-box {
+      display: flex;
+      gap: 12px;
+    }
+
+    .search-box input {
+      flex: 1;
+      padding: 14px 18px;
+      background: #1c1c22;
+      border: 1px solid #2e2e3a;
+      border-radius: 12px;
+      color: #e8e8ed;
+      font-size: 1rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .search-box input:focus { border-color: #7c6ef0; }
+    .search-box input::placeholder { color: #444; }
+
+    .search-box button {
+      padding: 14px 24px;
+      background: linear-gradient(135deg, #7c6ef0, #4f8ef7);
+      border: none;
+      border-radius: 12px;
+      color: #fff;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.1s;
+      white-space: nowrap;
+    }
+
+    .search-box button:hover { opacity: 0.88; }
+    .search-box button:active { transform: scale(0.97); }
+    .search-box button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .search-hint {
+      margin-top: 10px;
+      font-size: 0.82rem;
+      color: #444;
+    }
+
+    /* ── Status & results ── */
+    #status {
+      width: 100%;
+      max-width: 720px;
+      margin-top: 24px;
+      color: #666;
+      font-size: 0.9rem;
+      min-height: 20px;
+    }
+
+    #results {
+      width: 100%;
+      max-width: 720px;
+      margin-top: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* ── Result cards ── */
+    .card {
+      background: #1c1c22;
+      border: 1px solid #2e2e3a;
+      border-radius: 14px;
+      padding: 22px 26px;
+      transition: border-color 0.2s;
+    }
+
+    .card:hover { border-color: #3e3e52; }
+
+    .card-meta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .card-source {
+      font-size: 0.72rem;
+      color: #555;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      flex: 1;
+    }
+
+    .level-badge {
+      font-size: 0.68rem;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 20px;
+      letter-spacing: 0.3px;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .level-introductory  { background: #1a3a2a; color: #4ade80; border: 1px solid #166534; }
+    .level-intermediate  { background: #2a2a1a; color: #facc15; border: 1px solid #854d0e; }
+    .level-advanced      { background: #2a1a2a; color: #c084fc; border: 1px solid #7e22ce; }
+
+    .card-num {
+      font-size: 0.72rem;
+      color: #444;
+      font-weight: 600;
+      margin-right: 2px;
+    }
+
+    .card-title {
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: #e0e0ea;
+      margin-bottom: 10px;
+      line-height: 1.4;
+    }
+
+    .card-title a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .card-title a:hover { color: #a78bfa; }
+
+    .card-snippet {
+      font-size: 0.9rem;
+      color: #888;
+      line-height: 1.6;
+      margin-bottom: 12px;
+    }
+
+    .card-content {
+      font-size: 0.88rem;
+      color: #666;
+      line-height: 1.65;
+      display: none;
+      border-top: 1px solid #2e2e3a;
+      padding-top: 12px;
+      margin-top: 4px;
+    }
+
+    .toggle-btn {
+      background: none;
+      border: 1px solid #2e2e3a;
+      color: #666;
+      font-size: 0.78rem;
+      padding: 4px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s;
+    }
+
+    .toggle-btn:hover { color: #a78bfa; border-color: #a78bfa; }
+
+    /* ── Spinner ── */
+    .spinner {
+      display: inline-block;
+      width: 13px;
+      height: 13px;
+      border: 2px solid #333;
+      border-top-color: #7c6ef0;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin-right: 8px;
+      vertical-align: middle;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    @media (max-width: 500px) {
+      .mode-buttons { flex-direction: column; }
+      .categories-grid { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Smart Search</h1>
+    <p>Stay informed &middot; Go deep</p>
+  </header>
+
+  <!-- ── Mode selection ── -->
+  <div class="mode-buttons" id="mode-buttons">
+    <button class="mode-btn" id="btn-news" onclick="showMode('news')">
+      <div class="mode-icon">📰</div>
+      <div class="mode-title">News Feed</div>
+      <div class="mode-desc">Latest news by category &middot; past 2 weeks</div>
+    </button>
+    <button class="mode-btn" id="btn-search" onclick="showMode('search')">
+      <div class="mode-icon">🔍</div>
+      <div class="mode-title">Deep Search</div>
+      <div class="mode-desc">10 curated articles from basic to advanced on any topic</div>
+    </button>
+  </div>
+
+  <!-- ── News Feed view ── -->
+  <div id="view-news" class="view hidden">
+    <button class="back-btn" onclick="showMode(null)">&#8592; Back</button>
+    <div class="categories-grid">
+      <div class="category-card" onclick="doNewsSearch('latest AI advancements 2025 2026')">
+        <div class="cat-icon">🤖</div>
+        <div class="cat-name">Latest AI Advancements</div>
+      </div>
+      <div class="category-card" onclick="doNewsSearch('AI startups funding new companies 2026')">
+        <div class="cat-icon">🚀</div>
+        <div class="cat-name">AI Startups</div>
+      </div>
+      <div class="category-card" onclick="doNewsSearch('new AI models released LLM 2026')">
+        <div class="cat-icon">🧠</div>
+        <div class="cat-name">AI Models</div>
+      </div>
+      <div class="category-card" onclick="doNewsSearch('AI agents autonomous systems 2026')">
+        <div class="cat-icon">⚙️</div>
+        <div class="cat-name">AI Agents</div>
+      </div>
+      <div class="category-card" onclick="doNewsSearch('AI future predictions trends society 2026')">
+        <div class="cat-icon">🔭</div>
+        <div class="cat-name">AI Future</div>
+      </div>
+      <div class="category-card" onclick="doNewsSearch('international relations geopolitics diplomacy news 2026')">
+        <div class="cat-icon">🌐</div>
+        <div class="cat-name">International Relations</div>
+      </div>
+      <div class="category-card" onclick="doNewsSearch('counterterrorism research security intelligence 2026')">
+        <div class="cat-icon">🛡️</div>
+        <div class="cat-name">Counterterrorism Research</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Deep Search view ── -->
+  <div id="view-search" class="view hidden">
+    <button class="back-btn" onclick="showMode(null)">&#8592; Back</button>
+    <div class="search-box">
+      <input
+        type="text"
+        id="prompt"
+        placeholder='e.g. "reinforcement learning" or "nuclear deterrence"'
+        autocomplete="off"
+      />
+      <button id="search-btn" onclick="doDeepSearch()">Search</button>
+    </div>
+    <p class="search-hint">Results are ordered introductory &#8594; intermediate &#8594; advanced</p>
+  </div>
+
+  <div id="status"></div>
+  <div id="results"></div>
+
+  <script>
+    let activeMode = null;
+
+    document.getElementById("prompt").addEventListener("keydown", e => {
+      if (e.key === "Enter") doDeepSearch();
+    });
+
+    function showMode(mode) {
+      activeMode = mode;
+
+      document.getElementById("view-news").classList.toggle("hidden", mode !== "news");
+      document.getElementById("view-search").classList.toggle("hidden", mode !== "search");
+
+      document.getElementById("btn-news").classList.toggle("active", mode === "news");
+      document.getElementById("btn-search").classList.toggle("active", mode === "search");
+
+      if (!mode) {
+        document.getElementById("status").textContent = "";
+        document.getElementById("results").innerHTML = "";
+      }
+    }
+
+    function hostname(url) {
+      try { return new URL(url).hostname.replace(/^www\./, ""); }
+      catch { return url; }
+    }
+
+    function fmtDate(dateStr) {
+      if (!dateStr) return "";
+      try {
+        return new Date(dateStr).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+      } catch { return ""; }
+    }
+
+    function renderResults(articles, showLevel) {
+      const results = document.getElementById("results");
+      results.innerHTML = "";
+
+      articles.forEach((item, i) => {
+        const card = document.createElement("div");
+        card.className = "card";
+        const hasContent = item.content && item.content.length > 10;
+        const date = fmtDate(item.date);
+
+        let levelBadge = "";
+        if (showLevel && item.level) {
+          const label = item.level.charAt(0).toUpperCase() + item.level.slice(1);
+          levelBadge = `<span class="level-badge level-${item.level}">${label}</span>`;
+        }
+
+        card.innerHTML = `
+          <div class="card-meta">
+            <span class="card-source">${hostname(item.url)}${date ? " &middot; " + date : ""}</span>
+            ${showLevel ? `<span class="card-num">#${i + 1}</span>` : ""}
+            ${levelBadge}
+          </div>
+          <div class="card-title"><a href="${item.url}" target="_blank" rel="noopener">${item.title || "Untitled"}</a></div>
+          <div class="card-snippet">${item.snippet || ""}</div>
+          ${hasContent ? `
+            <button class="toggle-btn" onclick="toggleContent(${i})">Show article text</button>
+            <div class="card-content" id="content-${i}">${item.content}</div>
+          ` : ""}
+        `;
+
+        results.appendChild(card);
+      });
+    }
+
+    async function doNewsSearch(category) {
+      const status = document.getElementById("status");
+      const results = document.getElementById("results");
+
+      results.innerHTML = "";
+      status.innerHTML = '<span class="spinner"></span>Fetching latest news…';
+
+      try {
+        const res = await fetch("/news", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ category }),
+        });
+
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.detail || "Request failed");
+        }
+
+        const data = await res.json();
+        status.textContent = `${data.results.length} articles found`;
+        renderResults(data.results, false);
+      } catch (err) {
+        status.textContent = "Error: " + err.message;
+      }
+    }
+
+    async function doDeepSearch() {
+      const prompt = document.getElementById("prompt").value.trim();
+      if (!prompt) return;
+
+      const btn = document.getElementById("search-btn");
+      const status = document.getElementById("status");
+      const results = document.getElementById("results");
+
+      btn.disabled = true;
+      results.innerHTML = "";
+      status.innerHTML = '<span class="spinner"></span>Searching for the best articles…';
+
+      try {
+        const res = await fetch("/search", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt }),
+        });
+
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.detail || "Request failed");
+        }
+
+        const data = await res.json();
+        status.textContent = `${data.results.length} articles · ordered from introductory to advanced`;
+        renderResults(data.results, true);
+      } catch (err) {
+        status.textContent = "Error: " + err.message;
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    function toggleContent(i) {
+      const el = document.getElementById(`content-${i}`);
+      const btn = el.previousElementSibling;
+      const visible = el.style.display === "block";
+      el.style.display = visible ? "none" : "block";
+      btn.textContent = visible ? "Show article text" : "Hide article text";
+    }
+  </script>
+</body>
+</html>

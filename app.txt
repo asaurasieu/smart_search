@@ -1,0 +1,139 @@
+SMART SEARCH — APP DOCUMENTATION
+==================================
+
+WHAT THE APP DOES
+-----------------
+Smart Search is a free web app with two modes:
+
+1. NEWS FEED — Browse the latest news from the past 2 weeks across 7 preset categories:
+   Latest AI Advancements, AI Startups, AI Models, AI Agents, AI Future,
+   International Relations, and Counterterrorism Research.
+
+2. DEEP SEARCH — Search any topic and receive 10 curated articles ordered from
+   introductory to advanced, so the user can build knowledge progressively.
+
+No API keys required. All results are fetched in real time from DuckDuckGo.
+
+
+HOW TO RUN IT
+-------------
+1. Install dependencies:
+      pip install -r requirements.txt
+
+2. Start the server:
+      uvicorn main:app --reload
+
+3. Open in browser:
+      http://localhost:8000
+
+
+LIBRARIES USED
+--------------
+- fastapi          Web framework for the backend API.
+- uvicorn          ASGI server that runs the FastAPI app.
+- ddgs             Python client for DuckDuckGo search (no API key required).
+                   Formerly known as duckduckgo-search, renamed to ddgs.
+- httpx            Async HTTP client used to fetch article pages from their URLs.
+- beautifulsoup4   HTML parser used to extract readable text from fetched pages.
+
+
+PROJECT STRUCTURE
+-----------------
+smart_search/
+├── main.py            Backend (FastAPI app + search logic)
+├── requirements.txt   Python dependencies
+├── app.txt            This file
+└── static/
+    └── index.html     Frontend (HTML/CSS/JavaScript, single page)
+
+
+API ENDPOINTS
+-------------
+POST /news
+  Request:  { "category": "AI agents autonomous systems 2026" }
+  Used by:  Button 1 (News Feed) — called when user clicks a category card.
+
+POST /search
+  Request:  { "prompt": "reinforcement learning" }
+  Used by:  Button 2 (Deep Search) — called when user submits a topic.
+
+Both endpoints return:
+  {
+    "results": [
+      {
+        "title":   "Article headline",
+        "url":     "https://...",
+        "snippet": "Short summary from DuckDuckGo",
+        "content": "Up to 3000 chars of extracted article text",
+        "date":    "2026-03-10T...",   // empty string for Deep Search results
+        "level":   "introductory"      // "introductory" | "intermediate" | "advanced" | ""
+      },
+      ...
+    ]
+  }
+
+
+HOW NEWS FEED WORKS — STEP BY STEP
+------------------------------------
+1. User clicks Button 1 (News Feed). A 7-card category grid appears.
+
+2. User clicks a category (e.g., "AI Agents").
+
+3. The frontend sends a POST to /news:
+      { "category": "AI agents autonomous systems 2026" }
+
+4. The backend calls ddgs.news() with:
+   - The category string as the query
+   - max_results=15
+   - timelimit="m" (past month, to ensure coverage)
+
+5. Results are filtered in Python to keep only articles published in the last 14 days.
+   If filtering leaves nothing, all results are kept as a fallback.
+
+6. Results are sorted newest-first and capped at 10.
+
+7. Article pages are fetched in parallel using asyncio.gather + httpx.AsyncClient.
+   BeautifulSoup strips scripts, ads, navigation, and extracts <p> text (up to 3000 chars).
+
+8. Each article card shows: source domain, publication date, headline (linked),
+   DuckDuckGo snippet, and a toggle to expand the extracted article text.
+
+
+HOW DEEP SEARCH WORKS — STEP BY STEP
+--------------------------------------
+1. User clicks Button 2 (Deep Search). A search input appears.
+
+2. User types a topic (e.g., "nuclear deterrence") and presses Search or Enter.
+
+3. The frontend sends a POST to /search:
+      { "prompt": "nuclear deterrence" }
+
+4. The backend runs 3 DuckDuckGo text queries in sequence, each targeting a different
+   knowledge level:
+   - Introductory:  "introduction to {topic} beginners guide overview explained"
+   - Intermediate:  "{topic} how it works concepts guide"
+   - Advanced:      "{topic} advanced research technical deep dive"
+
+5. Results are deduplicated by URL across all three queries.
+   The target split is 4 introductory + 3 intermediate + 3 advanced = 10 articles.
+
+6. Article pages are fetched in parallel (asyncio.gather).
+
+7. Each article is tagged with its level ("introductory", "intermediate", "advanced").
+
+8. The frontend renders articles numbered 1–10 with color-coded level badges:
+   - Green  = Introductory
+   - Yellow = Intermediate
+   - Purple = Advanced
+
+
+KEY CHARACTERISTICS
+-------------------
+- Two distinct modes: curated news browsing (Button 1) and structured learning (Button 2).
+- Completely free: uses DuckDuckGo search — no account or API key needed.
+- Parallel article fetching: httpx.AsyncClient + asyncio.gather fetches all pages
+  concurrently, significantly reducing response time.
+- News Feed: filtered to past 2 weeks, sorted newest-first.
+- Deep Search: ordered introductory → advanced so users build knowledge progressively.
+- Real article content: goes beyond search snippets by fetching and parsing each page.
+- No database, no authentication, no external services — runs entirely locally.
